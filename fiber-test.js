@@ -29,48 +29,33 @@ if (Meteor.is_server) {
 
   Meteor.methods({
     parallelAsyncJob: function(message) {
-
-      // Setup a future
-      var fut = new Future();
-
       var urls = [
         'http://google.com',
         'http://news.ycombinator.com',
         'https://github.com'
       ];
 
-      var urlResults = [];
-
-      var onComplete = function(err, result) {
-        urlResults.push(result);
-
-        // Once we've recieved all the results return them
-        if (urlResults.length >= urls.length)
-
-          // Return the results
-          fut.ret(urlResults);
-      };
-
-      // Keep track of each job in an array
-      _.each(urls, function(url) {
-
+      var futures = _.map(urls, function(url) {
+        var future = new Future();
+        var onComplete = future.resolver();
+        
         /// Make async http call
         Meteor.http.get(url, function(error, result) {
 
-          // Get the title
-          var title = getTitle(result);
-
-          // Inform the future that we're done with,
-          // it and send the title in place of the 
-          // raw result
+          // Get the title, if there was no error
+          var title = (!error) && getTitle(result);
+          
           onComplete(error, title);
         });
-
+        
+        return future;
       });
-
-      // Wait for async to finish before returning
-      // the result
-      return fut.wait();
+      
+      // wait for all futures to finish
+      Future.wait(futures);
+      
+      // and grab the results out.
+      return _.invoke(futures, 'get'); 
     }
   });
 
